@@ -4,6 +4,12 @@
 #include <iostream>
 
 #pragma comment(lib, "ws2_32.lib")
+
+struct DataPackage {
+    int age;
+    char name[32];
+};
+
 int main()
 {
     WORD ver = MAKEWORD(2, 2);
@@ -48,7 +54,8 @@ int main()
         char recvBuf[256] = {};
         int nlen = recv(_sock, recvBuf, 256, 0);
         if (nlen > 0) {
-            std::cout << "Recv data: " << recvBuf << std::endl;
+            DataPackage* dp = (DataPackage*)recvBuf;
+            std::cout << "Recv data: name=" << dp->name << ", age=" << dp->age << std::endl;
         }
     }
     // 7.close SOCKET

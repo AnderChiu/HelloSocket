@@ -6,6 +6,12 @@
 #include <iostream>
 
 #pragma comment(lib, "ws2_32.lib")
+
+struct DataPackage {
+    int age;
+    char name[32];
+};
+
 int main()
 {
     WORD ver = MAKEWORD(2, 2);
@@ -49,13 +55,9 @@ int main()
             break;
         }
         std::cout << "recv cmd: " << _recvBuf << std::endl;
-        if (strcmp(_recvBuf, "getName") == 0) {
-            char msgBuf[] = "Ander.";
-            send(_cSock, msgBuf, strlen(msgBuf) + 1, 0);
-        }
-        else if (strcmp(_recvBuf, "getAge") == 0) {
-            char msgBuf[] = "24.";
-            send(_cSock, msgBuf, strlen(msgBuf) + 1, 0);
+        if (strcmp(_recvBuf, "getInfo") == 0) {
+            DataPackage dp = { 24, "Ander" };
+            send(_cSock, (const char*) & dp, sizeof(DataPackage), 0);
         }
         else {
             // 5.send
