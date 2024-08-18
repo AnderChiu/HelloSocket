@@ -8,7 +8,7 @@
 #pragma comment(lib, "ws2_32.lib")
 
 enum CMD {
-    CMD_LOGIN, CMD_LOGOUT,CMD_ERROR
+    CMD_LOGIN, CMD_LOGIN_RET, CMD_LOGOUT, CMD_LOGOUT_RET, CMD_ERROR
 };
 
 struct DataHeader {
@@ -17,20 +17,38 @@ struct DataHeader {
 };
 
 // DataPackage
-struct Login {
+struct Login : public DataHeader {
+    Login() {
+        cmd = CMD_LOGIN;
+        dataLength = sizeof(Login);
+    }
     char userName[32];
     char passWord[32];
 };
 
-struct LoginResult {
+struct LoginResult : public DataHeader {
+    LoginResult() {
+        cmd = CMD_LOGIN_RET;
+        dataLength = sizeof(LoginResult);
+        result = 0;
+    }
     int result;
 };
 
-struct Logout {
+struct Logout : public DataHeader {
+    Logout() {
+        cmd = CMD_LOGOUT;
+        dataLength = sizeof(Logout);
+    }
     char userName[32];
 };
 
-struct LogoutResult {
+struct LogoutResult : public DataHeader {
+    LogoutResult() {
+        cmd = CMD_LOGOUT_RET;
+        dataLength = sizeof(LogoutResult);
+        result = 0;
+    }
     int result;
 };
 
@@ -71,38 +89,39 @@ int main()
     std::cout << "new Client join: socket=" << _cSock << ", IP = " << inet_ntoa(clientAddr.sin_addr) << std::endl;
 
     while (true) {
-        DataHeader header = {};
+        //缓冲区
+        char szRecv[1024] = {};
         // 接收客户端数据
-        int nLen = recv(_cSock, (char*)&header, sizeof(header), 0);
+        int nLen = recv(_cSock, szRecv, sizeof(DataHeader), 0);
+        DataHeader* header = (DataHeader*)szRecv;
         if (nLen <= 0) {
             std::cout << "Client over!" << std::endl;
             break;
         }
-        std::cout << "recv cmd: " << header.cmd << ", data_length: " << header.dataLength << std::endl;
+        
         // 5.send
-        switch (header.cmd) {
+        switch (header->cmd) {
             case CMD_LOGIN:
             {
-                Login login = {};
-                recv(_cSock, (char*)&login, sizeof(Login), 0);
-                LoginResult ret = { 1 };
-                send(_cSock, (char*)&header, sizeof(DataHeader), 0);
+                Login* login = (Login*)szRecv;
+                recv(_cSock, szRecv + sizeof(DataHeader), header->dataLength - sizeof(DataHeader), 0);
+                std::cout << "recv cmd: " << header->cmd << ", data_length: " << header->dataLength << ", user=" << login->userName << ", passwd=" << login->passWord << std::endl;
+                LoginResult ret;
                 send(_cSock, (char*)&ret, sizeof(LoginResult), 0);
             }
             break;
             case CMD_LOGOUT:
             {
-                Logout logout = {};
-                recv(_cSock, (char*)&logout, sizeof(Logout), 0);
-                LogoutResult ret = { 1 };
-                send(_cSock, (char*)&header, sizeof(DataHeader), 0);
+                Logout* logout = (Logout*)szRecv;
+                recv(_cSock, szRecv + sizeof(DataHeader), header->dataLength - sizeof(DataHeader), 0);
+                std::cout << "recv cmd: " << header->cmd << ", data_length: " << header->dataLength << ", user=" << logout->userName << std::endl;
+                LogoutResult ret;
                 send(_cSock, (char*)&ret, sizeof(LogoutResult), 0);
             }
             break;
             default:
             {
-                header.cmd = CMD_ERROR;
-                header.dataLength = 0;
+                DataHeader header = { CMD_ERROR , 0 };
                 send(_cSock, (char*)&header, sizeof(header), 0);
             }
             break;

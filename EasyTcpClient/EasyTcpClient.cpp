@@ -6,7 +6,7 @@
 #pragma comment(lib, "ws2_32.lib")
 
 enum CMD {
-    CMD_LOGIN, CMD_LOGOUT, CMD_ERROR
+    CMD_LOGIN, CMD_LOGIN_RET, CMD_LOGOUT, CMD_LOGOUT_RET, CMD_ERROR
 };
 
 struct DataHeader {
@@ -15,20 +15,38 @@ struct DataHeader {
 };
 
 // DataPackage
-struct Login {
+struct Login : public DataHeader {
+    Login() {
+        cmd = CMD_LOGIN;
+        dataLength = sizeof(Login);
+    }
     char userName[32];
     char passWord[32];
 };
 
-struct LoginResult {
+struct LoginResult : public DataHeader {
+    LoginResult() {
+        cmd = CMD_LOGIN_RET;
+        dataLength = sizeof(LoginResult);
+        result = 0;
+    }
     int result;
 };
 
-struct Logout {
+struct Logout : public DataHeader {
+    Logout() {
+        cmd = CMD_LOGOUT;
+        dataLength = sizeof(Logout);
+    }
     char userName[32];
 };
 
-struct LogoutResult {
+struct LogoutResult : public DataHeader {
+    LogoutResult() {
+        cmd = CMD_LOGOUT_RET;
+        dataLength = sizeof(LogoutResult);
+        result = 0;
+    }
     int result;
 };
 
@@ -69,28 +87,23 @@ int main()
             break;
         }
         else if (strcmp(cmdBuf, "login") == 0) {
-            Login login = { "zyz", "zyzpass" };
-            DataHeader dh = { CMD_LOGIN,sizeof(login) };
+            Login login;
+            strcpy(login.userName, "zyz");
+            strcpy(login.passWord, "zyzpass");
             // 5.sned to Server
-            send(_sock, (const char*)&dh, sizeof(dh), 0);
             send(_sock, (const char*)&login, sizeof(login), 0);
             // 接收服务器返回数据
-            DataHeader retHeader = {};
             LoginResult loginRet = {};
-            recv(_sock, (char*)&retHeader, sizeof(retHeader), 0);
             recv(_sock, (char*)&loginRet, sizeof(loginRet), 0);
             std::cout << "LoginResult: " << loginRet.result << std::endl;
         }
         else if (strcmp(cmdBuf, "logout") == 0) {
-            Logout logout = { "zyz"};
-            DataHeader dh = { CMD_LOGOUT,sizeof(logout) };
+            Logout logout;
+            strcpy(logout.userName, "zyz");
             // 5.sned to Server
-            send(_sock, (const char*)&dh, sizeof(dh), 0);
             send(_sock, (const char*)&logout, sizeof(logout), 0);
             // 接收服务器返回数据
-            DataHeader retHeader = {};
             LogoutResult logoutRet = {};
-            recv(_sock, (char*)&retHeader, sizeof(retHeader), 0);
             recv(_sock, (char*)&logoutRet, sizeof(logoutRet), 0);
             std::cout << "LogoutResult: " << logoutRet.result << std::endl;
         }
