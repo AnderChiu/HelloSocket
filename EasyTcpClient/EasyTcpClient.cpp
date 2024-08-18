@@ -5,9 +5,31 @@
 
 #pragma comment(lib, "ws2_32.lib")
 
-struct DataPackage {
-    int age;
-    char name[32];
+enum CMD {
+    CMD_LOGIN, CMD_LOGOUT, CMD_ERROR
+};
+
+struct DataHeader {
+    short cmd;
+    short dataLength;
+};
+
+// DataPackage
+struct Login {
+    char userName[32];
+    char passWord[32];
+};
+
+struct LoginResult {
+    int result;
+};
+
+struct Logout {
+    char userName[32];
+};
+
+struct LogoutResult {
+    int result;
 };
 
 int main()
@@ -46,16 +68,34 @@ int main()
             std::cout << "[exit] Task Over!!!" << std::endl;
             break;
         }
-        else {
+        else if (strcmp(cmdBuf, "login") == 0) {
+            Login login = { "zyz", "zyzpass" };
+            DataHeader dh = { CMD_LOGIN,sizeof(login) };
             // 5.sned to Server
-            send(_sock, cmdBuf, strlen(cmdBuf) + 1, 0);
+            send(_sock, (const char*)&dh, sizeof(dh), 0);
+            send(_sock, (const char*)&login, sizeof(login), 0);
+            // 接收服务器返回数据
+            DataHeader retHeader = {};
+            LoginResult loginRet = {};
+            recv(_sock, (char*)&retHeader, sizeof(retHeader), 0);
+            recv(_sock, (char*)&loginRet, sizeof(loginRet), 0);
+            std::cout << "LoginResult: " << loginRet.result << std::endl;
         }
-        // 6.recv msg from server
-        char recvBuf[256] = {};
-        int nlen = recv(_sock, recvBuf, 256, 0);
-        if (nlen > 0) {
-            DataPackage* dp = (DataPackage*)recvBuf;
-            std::cout << "Recv data: name=" << dp->name << ", age=" << dp->age << std::endl;
+        else if (strcmp(cmdBuf, "logout") == 0) {
+            Logout logout = { "zyz"};
+            DataHeader dh = { CMD_LOGOUT,sizeof(logout) };
+            // 5.sned to Server
+            send(_sock, (const char*)&dh, sizeof(dh), 0);
+            send(_sock, (const char*)&logout, sizeof(logout), 0);
+            // 接收服务器返回数据
+            DataHeader retHeader = {};
+            LogoutResult logoutRet = {};
+            recv(_sock, (char*)&retHeader, sizeof(retHeader), 0);
+            recv(_sock, (char*)&logoutRet, sizeof(logoutRet), 0);
+            std::cout << "LogoutResult: " << logoutRet.result << std::endl;
+        }
+        else {
+            std::cout << "不支持的命令，重写输入！" << std::endl;
         }
     }
     // 7.close SOCKET

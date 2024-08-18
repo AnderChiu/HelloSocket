@@ -7,9 +7,31 @@
 
 #pragma comment(lib, "ws2_32.lib")
 
-struct DataPackage {
-    int age;
-    char name[32];
+enum CMD {
+    CMD_LOGIN, CMD_LOGOUT,CMD_ERROR
+};
+
+struct DataHeader {
+    short cmd;
+    short dataLength;
+};
+
+// DataPackage
+struct Login {
+    char userName[32];
+    char passWord[32];
+};
+
+struct LoginResult {
+    int result;
+};
+
+struct Logout {
+    char userName[32];
+};
+
+struct LogoutResult {
+    int result;
 };
 
 int main()
@@ -46,23 +68,44 @@ int main()
     if (_cSock == INVALID_SOCKET) {
         std::cout << "ERROR, INVALID Client SOCKET." << std::endl;
     }
-    std::cout << "new Client join: socket=" << _cSock << "IP = " << inet_ntoa(clientAddr.sin_addr) << std::endl;
-    char _recvBuf[128] = {};
+    std::cout << "new Client join: socket=" << _cSock << ", IP = " << inet_ntoa(clientAddr.sin_addr) << std::endl;
+
     while (true) {
-        int nLen = recv(_cSock, _recvBuf, 128, 0);
+        DataHeader header = {};
+        // 接收客户端数据
+        int nLen = recv(_cSock, (char*)&header, sizeof(header), 0);
         if (nLen <= 0) {
             std::cout << "Client over!" << std::endl;
             break;
         }
-        std::cout << "recv cmd: " << _recvBuf << std::endl;
-        if (strcmp(_recvBuf, "getInfo") == 0) {
-            DataPackage dp = { 24, "Ander" };
-            send(_cSock, (const char*) & dp, sizeof(DataPackage), 0);
-        }
-        else {
-            // 5.send
-            char msgBuf[] = "???";
-            send(_cSock, msgBuf, strlen(msgBuf) + 1, 0);
+        std::cout << "recv cmd: " << header.cmd << ", data_length: " << header.dataLength << std::endl;
+        // 5.send
+        switch (header.cmd) {
+            case CMD_LOGIN:
+            {
+                Login login = {};
+                recv(_cSock, (char*)&login, sizeof(Login), 0);
+                LoginResult ret = { 1 };
+                send(_cSock, (char*)&header, sizeof(DataHeader), 0);
+                send(_cSock, (char*)&ret, sizeof(LoginResult), 0);
+            }
+            break;
+            case CMD_LOGOUT:
+            {
+                Logout logout = {};
+                recv(_cSock, (char*)&logout, sizeof(Logout), 0);
+                LogoutResult ret = { 1 };
+                send(_cSock, (char*)&header, sizeof(DataHeader), 0);
+                send(_cSock, (char*)&ret, sizeof(LogoutResult), 0);
+            }
+            break;
+            default:
+            {
+                header.cmd = CMD_ERROR;
+                header.dataLength = 0;
+                send(_cSock, (char*)&header, sizeof(header), 0);
+            }
+            break;
         }
     }
     // 6.close SOCKET
