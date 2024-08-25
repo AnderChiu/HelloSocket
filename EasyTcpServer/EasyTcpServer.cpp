@@ -8,7 +8,7 @@
 #pragma comment(lib, "ws2_32.lib")
 
 enum CMD {
-    CMD_LOGIN, CMD_LOGIN_RET, CMD_LOGOUT, CMD_LOGOUT_RET, CMD_ERROR
+    CMD_LOGIN, CMD_LOGIN_RET, CMD_LOGOUT, CMD_LOGOUT_RET, CMD_ERROR, CMD_NEW_USER_JOIN
 };
 
 struct DataHeader {
@@ -52,6 +52,16 @@ struct LogoutResult : public DataHeader {
     int result;
 };
 
+struct NewUserJoin : public DataHeader {
+    NewUserJoin() {
+        cmd = CMD_NEW_USER_JOIN;
+        dataLength = sizeof(NewUserJoin);
+        sock = 0;
+    }
+    int sock;
+};
+
+
 std::vector<SOCKET> g_clients;
 
 int process(SOCKET _cSock) {
@@ -61,7 +71,7 @@ int process(SOCKET _cSock) {
     int nLen = recv(_cSock, szRecv, sizeof(DataHeader), 0);
     DataHeader* header = (DataHeader*)szRecv;
     if (nLen <= 0) {
-        std::cout << "Client over!" << std::endl;
+        std::cout << "客户端结束!" << std::endl;
         return -1;
     }
 
@@ -71,7 +81,7 @@ int process(SOCKET _cSock) {
         {
             Login* login = (Login*)szRecv;
             recv(_cSock, szRecv + sizeof(DataHeader), header->dataLength - sizeof(DataHeader), 0);
-            std::cout << "recv cmd: " << header->cmd << ", data_length: " << header->dataLength << ", user=" << login->userName << ", passwd=" << login->passWord << std::endl;
+            std::cout << "收到CMD命令: " << header->cmd << ", data_length: " << header->dataLength << ", user=" << login->userName << ", passwd=" << login->passWord << std::endl;
             LoginResult ret;
             send(_cSock, (char*)&ret, sizeof(LoginResult), 0);
         }
@@ -80,7 +90,7 @@ int process(SOCKET _cSock) {
         {
             Logout* logout = (Logout*)szRecv;
             recv(_cSock, szRecv + sizeof(DataHeader), header->dataLength - sizeof(DataHeader), 0);
-            std::cout << "recv cmd: " << header->cmd << ", data_length: " << header->dataLength << ", user=" << logout->userName << std::endl;
+            std::cout << "收到CMD命令: " << header->cmd << ", data_length: " << header->dataLength << ", user=" << logout->userName << std::endl;
             LogoutResult ret;
             send(_cSock, (char*)&ret, sizeof(LogoutResult), 0);
         }
@@ -108,29 +118,29 @@ int main()
     _sin.sin_port = htons(4567); // host to net unsigned short
     _sin.sin_addr.S_un.S_addr = inet_addr("127.0.0.1");
     if (bind(_sock, (sockaddr*)&_sin, sizeof(_sin)) == SOCKET_ERROR) {
-        std::cout << "ERROR, bind PORT fail!" << std::endl;
+        std::cout << "ERROR 绑定端口失败" << std::endl;
     }
     else {
-        std::cout << "bind PORT success" << std::endl;
+        std::cout << "绑定端口成功" << std::endl;
     }
     // 3.listen to SOCKET
     if (listen(_sock, 5) == SOCKET_ERROR) {
-        std::cout << "ERROR, listen PORT fail!" << std::endl;
+        std::cout << "ERROR 监听端口失败!" << std::endl;
     }
     else {
-        std::cout << "listen PORT success" << std::endl;
+        std::cout << "监听端口成功" << std::endl;
     }
 
     while (true) {
-        // 伯克利 socket
+        // 伯克利套接字BSD socket
         fd_set fdRead;
         fd_set fdWrite;
         fd_set fdExp;
-
+        // 清理集合
         FD_ZERO(&fdRead);
         FD_ZERO(&fdWrite);
         FD_ZERO(&fdExp);
-
+        // 将描述符(socket)加入集合
         FD_SET(_sock, &fdRead);
         FD_SET(_sock, &fdWrite);
         FD_SET(_sock, &fdExp);
@@ -141,12 +151,13 @@ int main()
 
         // nfds是一个整数表示fd_set集合中所有描述符的范围而不是数量
         // 既是所有文件描述符的最大值+1 在windows中可写0
-        int ret = select(_sock + 1, &fdRead, &fdWrite, &fdExp, NULL);
+        timeval t = { 1, 0 };
+        int ret = select(_sock + 1, &fdRead, &fdWrite, &fdExp, &t);
         if (ret < 0) {
             std::cout << "select任务结束!\n" << std::endl;
             break;
         }
-
+        // 判断描述符是否在集合中
         if (FD_ISSET(_sock, &fdRead)) {
             FD_CLR(_sock, &fdRead);
             // 4.accept
@@ -155,10 +166,16 @@ int main()
             SOCKET _cSock = INVALID_SOCKET;
             _cSock = accept(_sock, (sockaddr*)&clientAddr, &nAddrLen);
             if (_cSock == INVALID_SOCKET) {
-                std::cout << "ERROR, 无效 Client SOCKET." << std::endl;
+                std::cout << "ERROR 无效客户端SOCKET." << std::endl;
             }
-            g_clients.push_back(_cSock);
-            std::cout << "新客户端加入: socket=" << _cSock << ", IP = " << inet_ntoa(clientAddr.sin_addr) << std::endl;
+            else {
+                for (int n = g_clients.size() - 1; n >= 0; n--) {
+                    NewUserJoin userJoin;
+                    send(g_clients[n], (const char*)&userJoin, sizeof(NewUserJoin), 0);
+                }
+                g_clients.push_back(_cSock);
+                std::cout << "新客户端加入: socket=" << _cSock << ", IP = " << inet_ntoa(clientAddr.sin_addr) << std::endl;
+            }
         }
 
         for (int n = 0; n < fdRead.fd_count; n++) {
@@ -168,6 +185,8 @@ int main()
                     g_clients.erase(iter);
             }
         }
+
+        //std::cout << "空闲时间处理其他任务!" << std::endl;
     }
     // 6.close SOCKET
     for (int n = g_clients.size() - 1; n >= 0; n--) {
@@ -176,7 +195,7 @@ int main()
     
     // Clean Windows Socket ENV
     WSACleanup();
-    std::cout << "Task Over!!!" << std::endl;
+    std::cout << "任务结束!!!" << std::endl;
     getchar();
     return 0;
 }
