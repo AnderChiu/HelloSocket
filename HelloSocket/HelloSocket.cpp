@@ -1,15 +1,19 @@
-﻿#define WIN32_LEAN_AND_MEAN
-#include <WinSock2.h>
-#include <Windows.h>
-#include <iostream>
+﻿#include <iostream>
+#include <thread>
+using namespace std;
 
-#pragma comment(lib, "ws2_32.lib")
+void workFun() {
+    for (int i = 0; i < 4; i++) {
+        cout << "Hello, other thread." << endl;
+    }
+}
+
 int main()
 {
-    WORD ver = MAKEWORD(2, 2);
-    WSADATA dat;
-    WSAStartup(ver, &dat);
-
-    WSACleanup();
-    //std::cout << "Hello World!\n";
+    thread t(workFun);
+    t.detach();
+    for (int i = 0; i < 4; i++) {
+        std::cout << "Hello World!" << endl;
+    }
+    return 0;
 }

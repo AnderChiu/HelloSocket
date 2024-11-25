@@ -6,6 +6,7 @@ const int cCount = 10000;
 //发送线程数量
 const int tCount = 4;
 EasyTcpClient* client[cCount];
+
 void cmdThread() {
 	while (true) {
 		char cmdBuf[256] = {};

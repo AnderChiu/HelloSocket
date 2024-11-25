@@ -25,14 +25,10 @@ public:
 
 	//ªÒ»°Œ¢√Î
 	long long getElapsedTimeInMicroSec() {
-
 		return duration_cast<microseconds>(high_resolution_clock::now() - _begin).count();
 	}
 protected:
 	time_point<high_resolution_clock> _begin;
-
-
-
 };
 
 
