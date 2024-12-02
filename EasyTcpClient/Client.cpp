@@ -1,4 +1,4 @@
-﻿#include "TcpClient.hpp"
+﻿#include "EasyTcpClient.hpp"
 #include<thread>
 bool g_bRun = true;
 //客户端数量
@@ -23,6 +23,7 @@ void cmdThread() {
 }
 
 void sendThread(int id) {
+	printf("thread<%d>,start\n", id);
 	//4个线程 ID 1~4
 	int c = cCount / tCount;
 	int begin = (id - 1) * c;
@@ -33,8 +34,8 @@ void sendThread(int id) {
 	}
 	for (int n = begin; n < end; n++) {
 		client[n]->Connect("127.0.0.1", 4567);
-		printf("thread<%d>,Connect=%d\n", id, n);
 	}
+	printf("thread<%d>,Connect<begin=%d, end=%d>\n", id, begin, end);
 
 	std::chrono::milliseconds t(3000);
 	std::this_thread::sleep_for(t);
@@ -48,14 +49,18 @@ void sendThread(int id) {
 	while (g_bRun) {
 		for (int n = begin; n < end; n++) {
 			client[n]->SendData(login, nLen);
-			//client[n]->OnRun();
+			client[n]->OnRun();
 		}
 	}
 
 	for (int n = begin; n < end; n++) {
 		client[n]->Close();
+		delete client[n];
 	}
+
+	printf("thread<%d>,exit\n", id);
 }
+
 int main() {
 	//启动UI线程
 	std::thread t1(cmdThread);
