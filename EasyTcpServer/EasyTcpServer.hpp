@@ -25,6 +25,7 @@
 #include<atomic>
 #include<functional>
 #include<iostream>
+#include<map>
 #include"MessageHeader.hpp"
 #include"CELLTimestamp.hpp"
 
@@ -80,11 +81,13 @@ class INetEvent {
 public:
 	//纯虚函数
 	//客户端加入事件
-	virtual void OnNetJoin(ClientSocket* pClient) = 0;
+	virtual void OnClientJoin(ClientSocket* pClient) = 0;
 	//客户端离开事件
-	virtual void OnNetLeave(ClientSocket* pClient) = 0;
+	virtual void OnClientLeave(ClientSocket* pClient) = 0;
 	//客户端消息事件
 	virtual void OnNetMsg(ClientSocket* pClient, DataHeader* header) = 0;
+	//recv事件
+	virtual void OnNetRecv(ClientSocket* pClient) = 0;
 private:
 
 };
@@ -133,15 +136,23 @@ public:
 	}
 
 	//处理网络消息
-	//int _nCount = 0;
+	//备份客户socket fd_set
+	fd_set _fdRead_bak;
+	//客户列表是否有变化
+	bool _clients_change;
+	SOCKET _maxSock;
 	bool OnRun() {
+		_clients_change = true;
 		while (isRun()) {
-			if (_clientsBuff.size() > 0) {//从缓冲队列里取出客户数据
+			//从缓冲队列里取出新客户数据
+			if (_clientsBuff.size() > 0) {
+				//自解锁lock_guard，作用域结束后自动释放锁，因此if执行结束后，_mutex就释放了
 				std::lock_guard<std::mutex> lock(_mutex);
 				for (auto pClient : _clientsBuff) {
-					_clients.push_back(pClient);
+					_clients[pClient->sockfd()] = pClient;
 				}
 				_clientsBuff.clear();
+				_clients_change = true;
 			}
 
 			//如果没有需要处理的客户端，就跳过
@@ -155,37 +166,64 @@ public:
 			fd_set fdRead;//描述符（socket） 集合
 			//清理集合
 			FD_ZERO(&fdRead);
-			//将描述符（socket）加入集合
-			SOCKET maxSock = _clients[0]->sockfd();
-			for (int n = (int)_clients.size() - 1; n >= 0; n--) {
-				FD_SET(_clients[n]->sockfd(), &fdRead);
-				if (maxSock < _clients[n]->sockfd()) {
-					maxSock = _clients[n]->sockfd();
+			//根据_clients_change判断是否有新客户端加入，如果有那么进行新的FD_SET
+			if (_clients_change) {
+				_clients_change = false;
+				for (auto iter : _clients) {
+					FD_SET(iter.second->sockfd(), &fdRead);
+					if (_maxSock < iter.second->sockfd())
+						_maxSock = iter.second->sockfd();
 				}
+				//将更新后的fd_set保存到_fdRead_bak中
+				memcpy(&_fdRead_bak, &fdRead, sizeof(fd_set));
 			}
+			else {
+				//直接使用备份
+				memcpy(&fdRead, &_fdRead_bak, sizeof(fd_set));
+			}
+
 			///nfds 是一个整数值 是指fd_set集合中所有描述符(socket)的范围，而不是数量
 			///既是所有文件描述符最大值+1 在Windows中这个参数可以写0
-			int ret = select(maxSock + 1, &fdRead, nullptr, nullptr, nullptr);
+			int ret = select(_maxSock + 1, &fdRead, nullptr, nullptr, nullptr); //从服务器一般只用来接收数据，故这里设置为阻塞也可以
 			if (ret < 0) {
-				printf("select任务结束。\n");
+				printf("Server: select任务结束。\n");
 				Close();
 				return false;
 			}
-			for (int n = (int)_clients.size() - 1; n >= 0; n--) {
-				if (FD_ISSET(_clients[n]->sockfd(), &fdRead)) {
-					if (-1 == RecvData(_clients[n])) {
-						auto iter = _clients.begin() + n;//std::vector<SOCKET>::iterator
-						if (iter != _clients.end()) {
-							if (_pNetEvent)
-								_pNetEvent->OnNetLeave(_clients[n]);
-							delete _clients[n];
-							_clients.erase(iter);
-						}
+
+#ifdef _WIN32
+		//如果是windows运行 fd_set拥有fd_count与fd_array成员
+		//我们可以遍历fd_set 然后从中获取数据 不需要使用FD_ISSET
+			for (int n = 0; n < fdRead.fd_count; n++) {
+				auto iter = _clients.find(fdRead.fd_array[n]);
+				//如果RecvData出错 那么就将该客户端从_client中移除
+				if (-1 == RecvData(iter->second)) {
+					if (_pNetEvent)
+						_pNetEvent->OnClientLeave(iter->second); //通知主服务器有客户端退出
+					delete iter->second;
+					_clients.erase(iter->first);
+					_clients_change = true; //有客户端退出重新进行FD_SET
+				}
+			}
+#else
+			//如果在unix下 fd_set无fd_count与fd_array成员 我们只能遍历_clients数组
+			for (auto iter : _clients) {
+				//因为_clients是map 因此每次iter返回一个pair 其first成员为SOCKET second成员为ClientSocket
+				if (FD_ISSET(iter.second->sockfd(), &fdRead)) {
+					if (-1 == RecvData(iter.second)) {
+						if (_pNetEvent)
+							_pNetEvent->OnClientLeave(iter.second); //通知主服务器有客户端退出
+						delete iter.second;
+						_clients.erase(iter.first);
+						_clients_change = true;
 					}
 				}
 			}
+#endif // _WIN32
 		}
+		return false;
 	}
+
 	//缓冲区
 	char _szRecv[RECV_BUFF_SIZE] = {};
 	//接收数据 处理粘包 拆分包
@@ -247,7 +285,7 @@ public:
 private:
 	SOCKET _sock;
 	//正式客户队列
-	std::vector<ClientSocket*> _clients;
+	std::map<SOCKET, ClientSocket*> _clients;
 	//缓冲客户队列
 	std::vector<ClientSocket*> _clientsBuff;
 	//缓冲队列的锁
@@ -269,6 +307,8 @@ protected:
 	std::atomic_int _recvCount;
 	//客户端计数
 	std::atomic_int _clientCount;
+	//表示服务端接收到客户端数据包的数量
+	std::atomic_int _msgCount;
 public:
 	EasyTcpServer() {
 		_sock = INVALID_SOCKET;
@@ -378,7 +418,7 @@ public:
 			}
 		}
 		pMinServer->addClient(pClient);
-		OnNetJoin(pClient);
+		OnClientJoin(pClient);
 	}
 
 	void Start(int nCellServer) {
@@ -452,11 +492,11 @@ public:
 	}
 
 	//只会被一个线程触发 安全
-	virtual void OnNetJoin(ClientSocket* pClient) {
+	virtual void OnClientJoin(ClientSocket* pClient) {
 		_clientCount++;
 	}
 	//cellserver 4 多个线程触发 不安全 如果只开启1个cellServer就是安全的
-	virtual void OnNetLeave(ClientSocket* pClient) {
+	virtual void OnClientLeave(ClientSocket* pClient) {
 		_clientCount--;
 	}
 	//cellserver 4 多个线程触发 不安全 如果只开启1个cellServer就是安全的

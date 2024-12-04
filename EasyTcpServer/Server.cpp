@@ -21,12 +21,12 @@ public:
 	//只会被一个线程触发 安全
 	virtual void OnNetJoin(ClientSocket* pClient) {
 		_clientCount++;
-		std::cout << "client<" << pClient->sockfd() << "> join" << std::endl;
+		//std::cout << "client<" << pClient->sockfd() << "> join" << std::endl;
 	}
 	//cellserver 4 多个线程触发 不安全 如果只开启1个cellServer就是安全的
 	virtual void OnNetLeave(ClientSocket* pClient) {
 		_clientCount--;
-		std::cout << "client<" << pClient->sockfd() << "> leave" << std::endl;
+		//std::cout << "client<" << pClient->sockfd() << "> leave" << std::endl;
 	}
 	//cellserver 4 多个线程触发 不安全 如果只开启1个cellServer就是安全的
 	virtual void OnNetMsg(ClientSocket* pClient, DataHeader* header) {
@@ -38,8 +38,8 @@ public:
 			Login* login = (Login*)header;
 			//printf("收到客户端<Socket=%d>请求：CMD_LOGIN,数据长度：%d,userName=%s PassWord=%s\n", cSock, login->dataLength, login->userName, login->PassWord);
 			//忽略判断用户密码是否正确的过程
-			LoginResult ret;
-			pClient->SendData(&ret);
+			//LoginResult ret;
+			//pClient->SendData(&ret);
 		}
 		break;
 		case CMD_LOGOUT:

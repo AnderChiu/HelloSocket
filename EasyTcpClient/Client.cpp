@@ -49,7 +49,7 @@ void sendThread(int id) {
 	while (g_bRun) {
 		for (int n = begin; n < end; n++) {
 			client[n]->SendData(login, nLen);
-			client[n]->OnRun();
+			//client[n]->OnRun();
 		}
 	}
 
