@@ -230,6 +230,7 @@ public:
 	int RecvData(ClientSocket* pClient) {
 		// 5 接收客户端数据
 		int nLen = (int)recv(pClient->sockfd(), _szRecv, RECV_BUFF_SIZE, 0);
+		_pNetEvent->OnNetRecv(pClient);
 		//printf("nLen=%d\n", nLen);
 		if (nLen <= 0) {
 			printf("客户端<Socket=%d>已退出，任务结束。\n", pClient->sockfd());
@@ -314,6 +315,7 @@ public:
 		_sock = INVALID_SOCKET;
 		_recvCount = 0;
 		_clientCount = 0;
+		_msgCount = 0;
 	}
 	virtual ~EasyTcpServer() {
 		Close();
@@ -485,8 +487,9 @@ public:
 	void time4msg() {
 		auto t1 = _tTime.getElapsedSecond();
 		if (t1 >= 1.0) {
-			printf("thread<%d>,time<%lf>,socket<%d>,clients<%d>,recvCount<%ld>\n", _cellServers.size(), t1, _sock, (int)_clientCount, (long)(_recvCount / t1));
+			printf("thread<%d>,time<%lf>,socket<%d>,clients<%d>,recv<%d>,msg<%d>\n", _cellServers.size(), t1, _sock, (int)_clientCount, (int)(_recvCount / t1), (int)(_msgCount / t1));
 			_recvCount = 0;
+			_msgCount = 0;
 			_tTime.update();
 		}
 	}
@@ -501,7 +504,7 @@ public:
 	}
 	//cellserver 4 多个线程触发 不安全 如果只开启1个cellServer就是安全的
 	virtual void OnNetMsg(ClientSocket* pClient, DataHeader* header) {
-		_recvCount++;
+		_msgCount++;
 	}
 };
 
