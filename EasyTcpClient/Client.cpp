@@ -5,13 +5,11 @@
 #include <iostream>
 
 bool g_bRun = true;
-//客户端数量
-const int cCount = 10000;
-//发送线程数量
-const int tCount = 4;
-EasyTcpClient* client[cCount];
-std::atomic_int sendCount = 0;
-std::atomic_int readyCount = 0;
+const int cCount = 10000;		//客户端数量
+const int tCount = 4;			//发送线程数量
+EasyTcpClient* client[cCount];	//客户端数组
+std::atomic_int sendCount = 0;	//send函数执行的次数
+std::atomic_int readyCount = 0;	//已经准备就绪的线程数量
 
 void cmdThread() {
 	while (true) {
@@ -30,26 +28,27 @@ void cmdThread() {
 
 void sendThread(int id) {
 	printf("thread<%d>,start\n", id);
-	//4个线程 ID 1~4
+	//4个线程 ID 1~4 如对10000个客户端均分给4个线程
 	int c = cCount / tCount;
 	int begin = (id - 1) * c;
 	int end = id * c;
 
 	for (int n = begin; n < end; n++) {
-		client[n] = new EasyTcpClient();
+		client[n] = new EasyTcpClient(); //创建客户端
 	}
 	for (int n = begin; n < end; n++) {
-		client[n]->Connect("127.0.0.1", 4567);
+		client[n]->Connect("127.0.0.1", 4567); //让每个客户端连接服务器
 	}
 	printf("thread<%d>,Connect<begin=%d, end=%d>\n", id, begin, end);
 
 	readyCount++;
-	//等待其他线程准备好发送数据
+	//等待其他线程准备好发送数据 如果不是所有线程都就绪就等待都准备好再一起返回发送数据
 	while (readyCount < tCount) {
 		std::chrono::milliseconds t(10);
 		std::this_thread::sleep_for(t);
 	}
 
+	//可以根据需求修改客户端单次发送给服务端的数据包数量
 	Login login[1];
 	for (int n = 0; n < 10; n++) {
 		strcpy(login[n].userName, "lyd");
@@ -65,6 +64,7 @@ void sendThread(int id) {
 		}
 	}
 
+	//关闭客户端
 	for (int n = begin; n < end; n++) {
 		client[n]->Close();
 		delete client[n];
