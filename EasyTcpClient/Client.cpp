@@ -37,7 +37,7 @@ void sendThread(int id) {
 		client[n] = new EasyTcpClient(); //创建客户端
 	}
 	for (int n = begin; n < end; n++) {
-		client[n]->Connect("127.0.0.1", 4567); //让每个客户端连接服务器
+		client[n]->ConnectServer("127.0.0.1", 4567); //让每个客户端连接服务器
 	}
 	printf("thread<%d>,Connect<begin=%d, end=%d>\n", id, begin, end);
 
@@ -66,7 +66,7 @@ void sendThread(int id) {
 
 	//关闭客户端
 	for (int n = begin; n < end; n++) {
-		client[n]->Close();
+		client[n]->CloseSocket();
 		delete client[n];
 	}
 
@@ -88,7 +88,7 @@ int main() {
 	while (g_bRun) {
 		auto t = tTime.getElapsedSecond();
 		if (t >= 1.0) {
-			std::cout << "thread<" << tCount << ">,clients<" << cCount << ">,time<" << t << ">,send<" << sendCount << ">" << std::endl;
+			std::cout << "thread<" << tCount << ">,clients<" << cCount << ">,time<" << t << ">,send<" << (int)(sendCount/t) << ">" << std::endl;
 			tTime.update();
 			sendCount = 0;
 		}

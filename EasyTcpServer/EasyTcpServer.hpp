@@ -77,7 +77,7 @@ public:
 
 class CellServer {
 public:
-	CellServer(SOCKET sock = INVALID_SOCKET) :_sock(sock), _maxSock(_sock), _thread(nullptr), _pNetEvent(nullptr), _clients_change(false) {
+	CellServer(SOCKET sock = INVALID_SOCKET) :_sock(sock), _maxSock(_sock), _pNetEvent(nullptr), _clients_change(false) {
 		memset(_szRecv, 0, sizeof(_szRecv));
 		memset(&_fdRead_bak, 0, sizeof(_fdRead_bak));
 	}
@@ -104,7 +104,7 @@ private:
 	fd_set							_fdRead_bak;	//备份客户socket fd_set
 	bool							_clients_change;//客户列表是否有变化
 	std::mutex						_mutex;			//缓冲队列的互斥锁
-	std::thread						_thread;		//当前子服务端执行的线程
+	std::thread*					_pthread;		//当前子服务端执行的线程
 	INetEvent*						_pNetEvent;		//网络事件对象
 	std::map<SOCKET, ClientSocket*>	_clients;		//真正存储客户端
 	std::vector<ClientSocket*>		_clientsBuff;	//存储客户端连接缓存队列 之后会被加入到_clients中
@@ -272,7 +272,7 @@ void CellServer::addClient(ClientSocket* pClient) {
 //启动当前服务线程
 void CellServer::Start() {
 	//创建一个线程，线程执行函数为Onrun()，其实可以不传递this，但是为了更安全，可以传递this给Onrun()
-	_thread = std::thread(std::mem_fn(&CellServer::OnRun), this);
+	_pthread = new std::thread(std::mem_fn(&CellServer::OnRun), this);
 }
 
 
@@ -304,6 +304,8 @@ public:
 	virtual void OnClientLeave(ClientSocket* pClient) { _clientCount--; }
 	//cellserver 4 多个线程触发 不安全 如果只开启1个cellServer就是安全的
 	virtual void OnNetMsg(ClientSocket* pClient, DataHeader* header) { _msgCount++; }
+
+	virtual void OnNetRecv(ClientSocket* pClient) { _recvCount++; }
 private:
 	SOCKET					 _sock;			//服务端套接字
 	std::vector<CellServer*> _cellServers;	//消息处理对象，内部会创建线程
