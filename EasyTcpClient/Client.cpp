@@ -11,6 +11,36 @@ EasyTcpClient* client[cCount];	//客户端数组
 std::atomic_int sendCount = 0;	//send函数执行的次数
 std::atomic_int readyCount = 0;	//已经准备就绪的线程数量
 
+void cmdThread();
+void sendThread(int id);
+
+int main() {
+	//启动UI线程
+	std::thread t1(cmdThread);
+	t1.detach();
+
+	//启动发送线程
+	for (int n = 0; n < tCount; n++) {
+		std::thread t1(sendThread, n + 1);
+		t1.detach();
+	}
+
+	//每秒打印一次信息 其中包括send()函数的执行次数
+	CELLTimestamp tTime;
+	while (g_bRun) {
+		auto t = tTime.getElapsedSecond();
+		if (t >= 1.0) {
+			std::cout << "thread<" << tCount << ">,clients<" << cCount << ">,time<" << t << ">,send<" << (int)(sendCount / t) << ">" << std::endl;
+			tTime.update();
+			sendCount = 0;
+		}
+		Sleep(1);
+	}
+
+	printf("已退出。\n");
+	return 0;
+}
+
 void cmdThread() {
 	while (true) {
 		char cmdBuf[256] = {};
@@ -71,30 +101,4 @@ void sendThread(int id) {
 	}
 
 	printf("thread<%d>,exit\n", id);
-}
-
-int main() {
-	//启动UI线程
-	std::thread t1(cmdThread);
-	t1.detach();
-
-	//启动发送线程
-	for (int n = 0; n < tCount; n++) {
-		std::thread t1(sendThread, n + 1);
-		t1.detach();
-	}
-
-	CELLTimestamp tTime;
-	while (g_bRun) {
-		auto t = tTime.getElapsedSecond();
-		if (t >= 1.0) {
-			std::cout << "thread<" << tCount << ">,clients<" << cCount << ">,time<" << t << ">,send<" << (int)(sendCount/t) << ">" << std::endl;
-			tTime.update();
-			sendCount = 0;
-		}
-		Sleep(1);
-	}
-
-	printf("已退出。\n");
-	return 0;
 }
