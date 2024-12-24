@@ -20,13 +20,11 @@ class MyServer : public EasyTcpServer {
 public:
 	//只会被一个线程触发 安全
 	virtual void OnClientJoin(ClientSocket* pClient) {
-		_clientCount++;
-		//std::cout << "client<" << pClient->sockfd() << "> join" << std::endl;
+		EasyTcpServer::OnClientJoin(pClient);
 	}
 	//cellserver 4 多个线程触发 不安全 如果只开启1个cellServer就是安全的
 	virtual void OnClientLeave(ClientSocket* pClient) {
-		_clientCount--;
-		//std::cout << "client<" << pClient->sockfd() << "> leave" << std::endl;
+		EasyTcpServer::OnClientLeave(pClient);
 	}
 
 	virtual void OnNetRecv(ClientSocket* pClient) {
@@ -35,7 +33,7 @@ public:
 
 	//cellserver 4 多个线程触发 不安全 如果只开启1个cellServer就是安全的
 	virtual void OnNetMsg(ClientSocket* pClient, DataHeader* header) {
-		_msgCount++;
+		EasyTcpServer::OnNetMsg(pClient, header);
 		switch (header->cmd) {
 		case CMD_LOGIN:
 		{

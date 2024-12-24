@@ -36,13 +36,13 @@ class EasyTcpClient {
 private:
 	SOCKET	_sock;
 	bool	_isConnect;							//当前是否连接
-	char	_recvBuff[RECV_BUFF_SIZE];			//第一缓冲区（接收缓冲区）用来存储从网络缓冲区中接收的数据
-	char	_recvMsgBuff[RECV_BUFF_SIZE * 5];	//第二缓冲区（消息缓冲区）将第一缓冲区中的数据存储在这个缓冲区，并在这个缓冲区中对数据进行处理（粘包拆包处理）
+	//char	_recvBuff[RECV_BUFF_SIZE];			//第一缓冲区（接收缓冲区）用来存储从网络缓冲区中接收的数据
+	char	_recvMsgBuff[RECV_BUFF_SIZE];		//第二缓冲区（消息缓冲区）将第一缓冲区中的数据存储在这个缓冲区，并在这个缓冲区中对数据进行处理（粘包拆包处理）
 	int		_lastPos;							//用来标识当前消息缓冲区中数据的结尾位置
 
 public:
 	EasyTcpClient() : _sock(INVALID_SOCKET), _isConnect(false), _lastPos(0) {
-		memset(_recvBuff, 0, sizeof(_recvBuff));
+		//memset(_recvBuff, 0, sizeof(_recvBuff));
 		memset(_recvMsgBuff, 0, sizeof(_recvMsgBuff));
 	}
 	virtual ~EasyTcpClient() { CloseSocket(); }
@@ -57,7 +57,6 @@ public:
 	virtual void OnNetMessage(DataHeader* header);		//响应网络消息
 	int SendData(DataHeader* header, int nLen);			//发送数据
 };
-
 
 void EasyTcpClient::InitSocket() {
 	//如果之前有连接了，关闭旧连接，开启新连接
@@ -81,6 +80,7 @@ void EasyTcpClient::InitSocket() {
 		//printf("建立Socket=<%d>成功...\n", _sock);
 	}
 }
+
 int EasyTcpClient::ConnectServer(const char* ip, unsigned int port) {
 	if (INVALID_SOCKET == _sock) {
 		InitSocket();
@@ -122,7 +122,6 @@ void EasyTcpClient::CloseSocket() {
 	_isConnect = false;
 }
 
-
 bool EasyTcpClient::OnRun() {
 	if (isRun()) {
 		fd_set fdRead;
@@ -155,8 +154,9 @@ bool EasyTcpClient::isRun() {
 }
 
 int EasyTcpClient::RecvData() {
+	char* _recvBuff = _recvMsgBuff + _lastPos;
 	//接收服务端数据
-	int nLen = (int)recv(_sock, _recvBuff, RECV_BUFF_SIZE, 0);
+	int nLen = (int)recv(_sock, _recvBuff, RECV_BUFF_SIZE - _lastPos, 0);
 	if (nLen < 0) {
 		std::cout << "<Socket=" << _sock << ">：recv函数出错！" << std::endl;
 		return -1;
@@ -167,7 +167,8 @@ int EasyTcpClient::RecvData() {
 	}
 
 	//将收到的数据拷贝到消息缓冲区
-	memcpy(_recvMsgBuff + _lastPos, _recvBuff, nLen);
+	//memcpy(_recvMsgBuff + _lastPos, _recvBuff, nLen);
+
 	//消息缓冲区的数据尾部位置后移
 	_lastPos += nLen;
 
@@ -235,4 +236,5 @@ int EasyTcpClient::SendData(DataHeader* header, int nLen) {
 	}
 	return ret;
 }
+
 #endif
