@@ -28,12 +28,12 @@ public:
 	}
 
 	virtual void OnNetRecv(ClientSocket* pClient) {
-		_recvCount++;
+		EasyTcpServer::OnNetRecv(pClient);
 	}
 
 	//cellserver 4 多个线程触发 不安全 如果只开启1个cellServer就是安全的
-	virtual void OnNetMsg(ClientSocket* pClient, DataHeader* header) {
-		EasyTcpServer::OnNetMsg(pClient, header);
+	virtual void OnNetMsg(CellServer* pCellServer, ClientSocket* pClient, DataHeader* header) {
+		EasyTcpServer::OnNetMsg(pCellServer, pClient, header);
 		switch (header->cmd) {
 		case CMD_LOGIN:
 		{
@@ -43,6 +43,8 @@ public:
 			//忽略判断用户密码是否正确的过程
 			//LoginResult ret;
 			//pClient->SendData(&ret);
+			LoginResult* ret = new LoginResult();
+			pCellServer->addSendTask(pClient, ret);
 		}
 		break;
 		case CMD_LOGOUT:

@@ -40,6 +40,8 @@
 #endif // RECV_BUFF_SIZE
 //#define _CellServer_THREAD_COUNT 4
 
+class CellServer;
+
 //客户端数据类型
 class ClientSocket {
 private:
@@ -81,7 +83,7 @@ public:
 				_lastSendPos = 0;											//数据尾部位置清零
 				//发送错误
 				if (SOCKET_ERROR == ret) {
-					return ret;
+					return -1;
 				}
 			}
 			//如果发送缓冲区还没满，那么将这条消息放到缓冲区中，而不直接发送
@@ -103,9 +105,24 @@ public:
 	//纯虚函数
 	virtual void OnClientJoin(ClientSocket* pClient) = 0;					//客户端加入事件
 	virtual void OnClientLeave(ClientSocket* pClient) = 0;					//客户端离开事件
-	virtual void OnNetMsg(ClientSocket* pClient, DataHeader* header) = 0;	//客户端消息事件
+	virtual void OnNetMsg(CellServer* pCellServer, ClientSocket* pClient, DataHeader* header) = 0;	//客户端消息事件
 	virtual void OnNetRecv(ClientSocket* pClient) = 0;						//recv事件
 };
+
+//网络消息发送任务
+class CellSendMsg2ClientTask :public CellTask {
+private:
+	ClientSocket* _pClient;	//发送给哪个客户端
+	DataHeader* _pHeader;	//要发送的数据的头指针
+public:
+	CellSendMsg2ClientTask(ClientSocket* pClient, DataHeader* header) : _pClient(pClient), _pHeader(header) {}
+	void doTask();	//执行任务
+};
+
+void CellSendMsg2ClientTask::doTask() {
+	_pClient->SendData(_pHeader);
+	delete _pHeader;
+}
 
 //网络消息接收处理服务类
 class CellServer {
@@ -126,7 +143,7 @@ public:
 	void setEventObj(INetEvent* event) { _pNetEvent = event; }					//设置事件对象，此处绑定的是EasyTcpServer
 	size_t getClientCount() { return _clients.size() + _clientsBuff.size(); }	//返回当前客户端的数量
 	virtual void OnNetMsg(ClientSocket* pClient, DataHeader* header);			//响应网络消息
-
+	void addSendTask(ClientSocket* pClient, DataHeader* header);
 private:
 	SOCKET							_sock;			//服务端套接字
 	SOCKET							_maxSock;		//当前最大的文件描述符值 select的参数1要使用
@@ -138,6 +155,7 @@ private:
 	std::map<SOCKET, ClientSocket*>	_clients;		//真正存储客户端
 	std::vector<ClientSocket*>		_clientsBuff;	//存储客户端连接缓存队列 之后会被加入到_clients中
 	//char							_recvBuff[RECV_BUFF_SIZE] = {}; //接收缓冲区
+	CellTaskServer					_taskServer;	//执行任务
 };
 
 //关闭Socket
@@ -289,41 +307,7 @@ int CellServer::RecvData(ClientSocket* pClient) {
 
 //响应网络消息
 void CellServer::OnNetMsg(ClientSocket* pClient, DataHeader* header) {
-	_pNetEvent->OnNetMsg(pClient, header);
-
-	switch (header->cmd) {
-	case CMD_LOGIN: //如果是登录
-	{
-		//Login *login = (Login*)header;
-		//std::cout << "服务端：收到客户端<Socket=" << pClient->sockfd() << ">的消息CMD_LOGIN，用户名：" << login->userName << "，密码：" << login->PassWord << std::endl;
-
-		//此处可以判断用户账户和密码是否正确等等（省略）
-
-		//返回登录的结果给客户端
-		LoginResult ret;
-		pClient->SendData(&ret);
-	}
-	break;
-	case CMD_LOGOUT:  //如果是退出
-	{
-		//Logout *logout = (Logout*)header;
-		//std::cout << "服务端：收到客户端<Socket=" << pClient->sockfd() << ">的消息CMD_LOGOUT，用户名：" << logout->userName << std::endl;
-
-		//返回退出的结果给客户端
-		LogoutResult ret;
-		pClient->SendData(&ret);
-	}
-	break;
-	default:  //如果有错误
-	{
-		//std::cout << "服务端：收到客户端<Socket=" << pClient->sockfd() << ">的未知消息消息" << std::endl;
-
-		//返回错误给客户端，DataHeader默认为错误消息
-		DataHeader ret;
-		pClient->SendData(&ret);
-	}
-	break;
-	}
+	_pNetEvent->OnNetMsg(this, pClient, header);
 }
 
 //将客户端加入到客户端连接缓冲队列中
@@ -339,25 +323,25 @@ void CellServer::addClient(ClientSocket* pClient) {
 void CellServer::Start() {
 	//创建一个线程，线程执行函数为Onrun()，其实可以不传递this，但是为了更安全，可以传递this给Onrun()
 	_pthread = new std::thread(std::mem_fn(&CellServer::OnRun), this);
+	//启动任务管理
+	_taskServer.Start();
 }
 
+//
+void CellServer::addSendTask(ClientSocket* pClient, DataHeader* header) {
+	CellSendMsg2ClientTask* task = new CellSendMsg2ClientTask(pClient, header);
+	_taskServer.addTask(task);
+}
 
 class EasyTcpServer : public INetEvent {
 public:
-	EasyTcpServer() {
-		_sock = INVALID_SOCKET;
-		_recvCount = 0;
-		_clientCount = 0;
-		_msgCount = 0;
-	}
-	virtual ~EasyTcpServer() {
-		Close();
-	}
+	EasyTcpServer() :_sock(INVALID_SOCKET), _msgCount(0), _recvCount(0), _clientCount(0) {}
+	virtual ~EasyTcpServer() { Close(); }
 public:
-	SOCKET InitSocket();							//初始化Socket
-	int Bind(const char* ip, unsigned short port);	//绑定ip和端口号
-	int Listen(int n);								//监听端口号
-	SOCKET Accept();								//接受客户端连接
+	SOCKET InitSocket();								//初始化Socket
+	int Bind(const char* ip, unsigned short port);		//绑定ip和端口号
+	int Listen(int n);									//监听端口号
+	SOCKET Accept();									//接受客户端连接
 	void addClientToCellServer(ClientSocket* pClient);	//将新客户加入到CellServer的客户端连接缓冲队列中
 	void Start(int nCellServer);						//创建从服务器，并运行所有的从服务器。(参数为从服务器的数量)
 	void Close();										//关闭Socket
@@ -375,14 +359,13 @@ public:
 		//std::cout << "client<" << pClient->sockfd() << "> leave" << std::endl;
 	}
 	//cellserver 4 多个线程触发 不安全 如果只开启1个cellServer就是安全的
-	virtual void OnNetMsg(ClientSocket* pClient, DataHeader* header) { _msgCount++; }
+	virtual void OnNetMsg(CellServer* pCellServer, ClientSocket* pClient, DataHeader* header) { _msgCount++; }
 	//recv事件
 	virtual void OnNetRecv(ClientSocket* pClient) { _recvCount++; }
 private:
 	SOCKET					 _sock;			//服务端套接字
 	std::vector<CellServer*> _cellServers;	//消息处理对象，内部会创建线程
 	CELLTimestamp			 _tTime;		//每秒消息计时
-protected:
 	std::atomic_int			_recvCount;		//收到消息计数recv()执行次数
 	std::atomic_int			_clientCount;	//客户端计数
 	std::atomic_int			_msgCount;		//表示服务端接收到客户端数据包的数量
@@ -538,8 +521,8 @@ bool EasyTcpServer::OnRun() {
 		FD_SET(_sock, &fdRead);	//将描述符（socket）加入集合
 		///nfds 是一个整数值 是指fd_set集合中所有描述符(socket)的范围，而不是数量
 		///既是所有文件描述符最大值+1 在Windows中这个参数可以写0
-		timeval t = { 0,10 };
-		int ret = select(_sock + 1, &fdRead, 0, 0, &t); //
+		timeval t = { 0,0 };
+		int ret = select(_sock + 1, &fdRead, nullptr, nullptr, &t);
 		if (ret < 0) {
 			printf("Accept Select任务结束。\n");
 			Close();

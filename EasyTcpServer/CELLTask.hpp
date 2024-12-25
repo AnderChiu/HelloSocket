@@ -16,21 +16,19 @@ public:
 class CellTaskServer
 {
 public:
-	CellTaskServer();
-	~CellTaskServer();
 	void addTask(CellTask* task);	//添加任务
 	void Start();					//启动工作线程
+protected:
 	void OnRun();					//工作函数
-	
 private:
 	std::list<CellTask*> _tasks;	//任务数据链表
-	std::list<CellTask*> _tasksBuf;	//任务数据缓冲区链表
+	std::list<CellTask*> _tasksBuff;	//任务数据缓冲区链表
 	std::mutex _mutex;				//改变数据缓冲区时需要加锁
 };
 
 void  CellTaskServer::addTask(CellTask* task) {
 	std::lock_guard<std::mutex> lock(_mutex);
-	_tasksBuf.push_back(task);
+	_tasksBuff.push_back(task);
 }
 
 void CellTaskServer::Start() {
@@ -41,12 +39,12 @@ void CellTaskServer::Start() {
 void CellTaskServer::OnRun() {
 	while (true) {
 		//从缓冲区取出数据
-		if (!_tasksBuf.empty()) {
+		if (!_tasksBuff.empty()) {
 			std::lock_guard<std::mutex> lock(_mutex);
-			for (auto pTask : _tasksBuf) {
+			for (auto pTask : _tasksBuff) {
 				_tasks.push_back(pTask);
 			}
-			_tasksBuf.clear();
+			_tasksBuff.clear();
 		}
 		
 		//如果没有任务休眠1ms
@@ -57,7 +55,7 @@ void CellTaskServer::OnRun() {
 		}
 
 		//处理任务
-		for (auto pTask : _tasksBuf) {
+		for (auto pTask : _tasksBuff) {
 			pTask->doTask();
 			delete pTask;
 		}
