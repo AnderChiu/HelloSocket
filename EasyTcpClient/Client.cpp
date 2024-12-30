@@ -90,7 +90,7 @@ void sendThread(int id) {
 			if (SOCKET_ERROR != client[n]->SendData(login, nLen)) {
 				sendCount++;
 			}
-			//client[n]->OnRun();
+			client[n]->OnRun();
 		}
 	}
 
