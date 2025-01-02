@@ -1,3 +1,3 @@
-![hello](.\src\hello.png)
+![hello](src/hello.png)
 
 # HelloSocket
